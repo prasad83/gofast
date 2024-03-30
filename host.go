@@ -20,6 +20,7 @@ func NewHandler(sessionHandler SessionHandler, clientFactory ClientFactory) Hand
 	return &defaultHandler{
 		sessionHandler: sessionHandler,
 		newClient:      clientFactory,
+		logger:         log.Default(),
 	}
 }
 
@@ -42,7 +43,7 @@ func (h *defaultHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c, err := h.newClient()
 	if err != nil {
 		http.Error(w, "failed to connect to FastCGI application", http.StatusBadGateway)
-		log.Printf("gofast: unable to connect to FastCGI application. %s",
+		h.logger.Printf("gofast: unable to connect to FastCGI application. %s",
 			err.Error())
 		return
 	}
@@ -56,7 +57,7 @@ func (h *defaultHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// signal to close the client
 		// or the pool to return the client
 		if err = c.Close(); err != nil {
-			log.Printf("gofast: error closing client: %s",
+			h.logger.Printf("gofast: error closing client: %s",
 				err.Error())
 		}
 	}()
@@ -65,17 +66,17 @@ func (h *defaultHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.sessionHandler(c, NewRequest(r))
 	if err != nil {
 		http.Error(w, "failed to process request", http.StatusInternalServerError)
-		log.Printf("gofast: unable to process request %s",
+		h.logger.Printf("gofast: unable to process request %s",
 			err.Error())
 		return
 	}
 	errBuffer := new(bytes.Buffer)
 	if err = resp.WriteTo(w, errBuffer); err != nil {
-		log.Printf("gofast: problem writing error buffer to response - %s", err)
+		h.logger.Printf("gofast: problem writing error buffer to response - %s", err)
 	}
 
 	if errBuffer.Len() > 0 {
-		log.Printf("gofast: error stream from application process %s",
+		h.logger.Printf("gofast: error stream from application process %s",
 			errBuffer.String())
 	}
 }
